@@ -72,7 +72,6 @@ Start the pipeline here
 
 
 if (params.hifi) {
-
 	process BamToCCS {
 
 		label 'pbccs'
@@ -112,45 +111,28 @@ if (params.hifi) {
 		"""
 	}
 
-	process CcsToFastq {
-
-		label 'bam2fastx'
-
-		input:
-		file(bam) from mergedReads
-
-		output:
-		file(reads) into Reads
-
-		script:
-		reads = bam.getBaseName() + ".fastq.gz"
-
-		"""
-			
-		"""
-
-	}
-
 } else {
 
-	process BamToFastq {
+	mergedReads = bamFile
 
-		label 'bam2fastx'
+}
 
-		input:
-		file(bam) from bamFile
+process BamToFastq {
 
-		output:
-		file(reads) into Reads
+	label 'bam2fastx'
 
-		script:
-		reads = bam.getBaseName() + ".fastq.gz"
+        input:
+        file(bam) from mergedReads
 
-		"""
-			bam2fastq -o ${bam.getBaseName()} $bam
-		"""
+        output:
+        file(reads) into Reads
 
-	}
+        script:
+        reads = bam.getBaseName() + ".fastq.gz"
+
+        """
+        	bam2fastq -o ${bam.getBaseName()} $bam
+        """
 
 }
 
