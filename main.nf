@@ -44,13 +44,18 @@ log.info "Flye assembly pipeline v${workflow.manifest.version}"
 log.info "Nextflow Version:     $workflow.nextflow.version"
 log.info "Command Line:         $workflow.commandLine"
 log.info "Authors:              M. Höppner"
+log.info "=================================================="
+log.info "Movie:		${params.bam}"
+log.info "IsHifi:			${params.hifi}"
+log.info "Genome size:		${params.genome_size}"
+log.info "Run QC:			${params.qc}"
 if (workflow.containerEngine) {
         log.info "Container engine:     ${workflow.containerEngine}"
 }
 log.info "================================================="
 log.info "Starting at:          $workflow.start"
 
-
+// Enables splitting of CCS read generation into 10 parallel processes
 def chunks = [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 ]
 
 if (!params.bam) {
@@ -70,9 +75,11 @@ if (!params.genome_size) {
 Start the pipeline here
 */
 
-
 if (params.hifi) {
+
 	process BamToCCS {
+
+		scratch true 
 
 		label 'pbccs'
 
@@ -85,7 +92,7 @@ if (params.hifi) {
 		file(reads) into ReadChunks
 
 		script:
-		reads = bam.getBaseName() + ".ccs.bam"
+		reads = bam.getBaseName() + "." + chunk + ".ccs.bam"
 
 		"""
 			ccs $bam $reads --chunk $chunk/10 -j ${task.cpus}
@@ -95,19 +102,21 @@ if (params.hifi) {
 
 	process CcsMerge {
 
-		label 'samtools'
+		label 'pbbam'
 
 		input:
 		file(read_chunks) from ReadChunks.collect()
 
 		output:
-		file(bam) into mergedReads
+		set file(bam),file(pbi) into mergedReads
 
 		script:
-		reads = "reads.ccs.bam"
+		bam = "reads.ccs.bam"
+		pbi = bam + ".pbi"
 
 		"""
-			samtools merge -@ ${task.cpus} $bam $read_chunks
+			pbmerge -o $bam $read_chunks
+			pbindex $bam
 		"""
 	}
 
@@ -122,7 +131,7 @@ process BamToFastq {
 	label 'bam2fastx'
 
         input:
-        file(bam) from mergedReads
+        set file(bam),file(pbi) from mergedReads
 
         output:
         file(reads) into Reads
@@ -162,4 +171,25 @@ process Flye {
 		flye $options $reads --genome-size ${params.genome_size} --threads ${task.cpus} --out-dir flye_assembly
 	"""
 
+}
+
+process nanoQC {
+
+	label 'nanoqc'
+
+	when:
+	params.qc
+
+	input:
+	file(fastq) from Reads
+
+	output:
+	file(qc_plot) into QCPlot
+
+	script:
+	qc_plot = "nanoqc.html"
+
+	"""
+		nanoQC -l 100 -o results $fastq
+	"""
 }
