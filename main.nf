@@ -45,12 +45,12 @@ log.info "Nextflow Version:     $workflow.nextflow.version"
 log.info "Command Line:         $workflow.commandLine"
 log.info "Authors:              M. Höppner"
 log.info "=================================================="
-log.info "Movie:		${params.bam}"
+log.info "Movie:			${params.bam}"
 log.info "IsHifi:			${params.hifi}"
 log.info "Genome size:		${params.genome_size}"
 log.info "Run QC:			${params.qc}"
 if (workflow.containerEngine) {
-        log.info "Container engine:     ${workflow.containerEngine}"
+        log.info "Container engine:     	${workflow.containerEngine}"
 }
 log.info "================================================="
 log.info "Starting at:          $workflow.start"
@@ -79,6 +79,12 @@ if (params.hifi) {
 
 	process BamToCCS {
 
+		publishDir "${params.outdir}/CCS", mode: 'copy',
+			saveAs: { filename ->
+				if( filename.indexOf("report.txt") > 0 ) filename
+				else null
+			}
+
 		scratch true 
 
 		label 'pbccs'
@@ -90,12 +96,15 @@ if (params.hifi) {
 
 		output:
 		file(reads) into ReadChunks
+		file(report)
 
 		script:
 		reads = bam.getBaseName() + "." + chunk + ".ccs.bam"
+		report = reads.getBaseName() + ".report.txt"
 
 		"""
 			ccs $bam $reads --chunk $chunk/10 -j ${task.cpus}
+			mv ccs_report.txt $report
 		"""
 
 	}
@@ -134,7 +143,7 @@ process BamToFastq {
         set file(bam),file(pbi) from mergedReads
 
         output:
-        file(reads) into Reads
+        file(reads) into (Reads, ReadsNanoqc, ReadsKat, ReadsNanoplot)
 
         script:
         reads = bam.getBaseName() + ".fastq.gz"
@@ -146,6 +155,8 @@ process BamToFastq {
 }
 
 process Flye {
+
+	publishDir "${params.outdir}/assembly", mode: 'copy'
 
 	label 'flye'
 
@@ -177,19 +188,89 @@ process nanoQC {
 
 	label 'nanoqc'
 
+	publishDir "${params.outdir}/QC", mode: 'copy'
+
 	when:
 	params.qc
 
 	input:
-	file(fastq) from Reads
+	file(fastq) from ReadsNanoqc
 
 	output:
-	file(qc_plot) into QCPlot
+	file(qc_plot)
 
 	script:
-	qc_plot = "nanoqc.html"
+	qc_plot = "results/nanoQC.html"
 
 	"""
 		nanoQC -l 100 -o results $fastq
 	"""
+}
+
+process nanoPlot {
+
+	label 'nanoplot'
+
+        publishDir "${params.outdir}/QC", mode: 'copy'
+
+	when:
+	params.qc
+
+	input:
+	file(fastq) from ReadsNanoplot
+
+	output:
+	file("nanoplot")
+
+	script:
+	"""
+		NanoPlot -t ${task.cpus} -o nanoplot --fastq $fastq 
+	"""	
+}
+
+process QCN50 {
+
+	publishDir "${params.outdir}/QC", mode: 'copy'
+
+	when:
+	params.qc
+
+	label 'gaas'
+
+	input:
+	file(assembly) from Assembly
+
+	output:
+	file(report)
+
+	script:
+	report = "stats/" + assembly.getBaseName() + "_stat.txt"
+	"""
+		gaas_fasta_statistics.pl -f $assembly -o stats
+	"""
+
+}
+
+process KatGCP {
+
+        publishDir "${params.outdir}/QC", mode: 'copy'
+
+	label 'kat'
+
+	when:
+	params.qc
+
+	input:
+	file(reads) from ReadsKat
+
+	output:
+	file(kat_dist) into KatDist
+
+	script:
+	kat_dist = "kat-gcp.mx.png"
+
+	"""
+		kat gcp -t ${task.cpus} $reads
+	"""
+
 }
