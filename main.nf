@@ -100,7 +100,7 @@ if (params.hifi) {
 
 		script:
 		reads = bam.getBaseName() + "." + chunk + ".ccs.bam"
-		report = reads.getBaseName() + ".report.txt"
+		report = bam.getBaseName() + "." + chunk + ".ccs.report.txt"
 
 		"""
 			ccs $bam $reads --chunk $chunk/10 -j ${task.cpus}
@@ -241,10 +241,10 @@ process QCN50 {
 	file(assembly) from Assembly
 
 	output:
-	file(report)
+	file(assembly_report)
 
 	script:
-	report = "stats/" + assembly.getBaseName() + "_stat.txt"
+	assembly_report = "stats/" + assembly.getBaseName() + "_stat.txt"
 	"""
 		gaas_fasta_statistics.pl -f $assembly -o stats
 	"""
