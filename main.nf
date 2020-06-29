@@ -51,7 +51,7 @@ log.info "Movie:			${params.bam}"
 log.info "IsHifi:			${params.hifi}"
 log.info "Genome size:		${params.genome_size}"
 log.info "Run QC:			${params.qc}"
-if (params.busco) {
+if (params.busco_lineage) {
 	log.info "BUSCO databases:	${params.busco_database_dir}"
 	log.info "BUSCO lineage:		${params.busco_lineage}"
 } else {
@@ -63,13 +63,10 @@ if (workflow.containerEngine) {
 log.info "================================================="
 log.info "Starting at:          $workflow.start"
 
-if (params.busco) {
+if (params.busco_lineage) {
 	if (!params.busco_database_dir) {
 		exit 1, "Cannot run Busco without a database directory (--busco_database_dir)"
 	}
-	if (!params.busco_lineage) {
-		exit 1, "Cannot run Busco without a lineage (--busco_lineage)"
-	} 
 	lineage_dir = file("${params.busco_database_dir}/${params.busco_lineage}")
 	if (!lineage_dir.exists()) {
 		exit 1, "Did not find the specified database dir / lineage on this machine"

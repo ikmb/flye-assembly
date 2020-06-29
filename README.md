@@ -17,11 +17,8 @@ Switch on QC options - will generate information about the input reads and the r
 ### `--hifi`
 Treat input movie as "hifi", and perform CCS generation prior to assembly
 
-### `--busco`
-Switch on BUSCO to check gene space coverage of the assembly (requires --busco_lineage)
-
 ### `--busco_lineage`
-Specifies which reference dataset will be used for BUSCO analysis. Available options:
+Switches on BUSCO to gauge gene space coverage and specifies which reference dataset will be used. Available options:
 
 * actinopterygii_odb10 
 * carnivora_odb10
