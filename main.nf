@@ -168,8 +168,12 @@ process Flye {
 	file(assembly_info)
 
 	script:
-	assembly = "flye_assembly/assembly.fasta"
-	assembly_info = "flye_assembly/assembly_info.txt"
+	folder_name = "flye_assembly"
+	if (params.hifi) {
+		folder_name = "flye_assembly_hifi"
+	}
+	assembly = folder_name + "/assembly.fasta"
+	assembly_info = folder_name + "/assembly_info.txt"
 
 	def options
 	if (params.hifi) {
@@ -179,7 +183,7 @@ process Flye {
 	}
 
 	"""
-		flye $options $reads --genome-size ${params.genome_size} --threads ${task.cpus} --out-dir flye_assembly
+		flye $options $reads --genome-size ${params.genome_size} --threads ${task.cpus} --out-dir $folder_name
 	"""
 
 }
@@ -200,10 +204,10 @@ process nanoQC {
 	file(qc_plot)
 
 	script:
-	qc_plot = "results/nanoQC.html"
+	qc_plot = "nanoqc/nanoQC.html"
 
 	"""
-		nanoQC -l 100 -o results $fastq
+		nanoQC -l 100 -o nanoqc $fastq
 	"""
 }
 
@@ -232,10 +236,10 @@ process QCN50 {
 
 	publishDir "${params.outdir}/QC", mode: 'copy'
 
+	label 'gaas'
+
 	when:
 	params.qc
-
-	label 'gaas'
 
 	input:
 	file(assembly) from Assembly
