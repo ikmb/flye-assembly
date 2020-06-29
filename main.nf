@@ -28,6 +28,8 @@ Options:
 --hifi			Wether the reads should be treated as hifi (i.e. ultra-high subread coverage)
 --genome_size		Expected genome size 
 --qc			Wether to run quality control steps
+--busco			Run BUSCO assembly
+--busco_lineage		Busco profile to use (e.g. aves_odb10)
 --email                 Provide an Email to which reports are send.
 --skip_multiqc          Do not generate a QC report
 """.stripIndent()
@@ -49,12 +51,31 @@ log.info "Movie:			${params.bam}"
 log.info "IsHifi:			${params.hifi}"
 log.info "Genome size:		${params.genome_size}"
 log.info "Run QC:			${params.qc}"
+if (params.busco) {
+	log.info "BUSCO databases:	${params.busco_database_dir}"
+	log.info "BUSCO lineage:		${params.busco_lineage}"
+} else {
+	log.info "Run BUSCO:		${params.busco}"
+}
 if (workflow.containerEngine) {
         log.info "Container engine:     	${workflow.containerEngine}"
 }
 log.info "================================================="
 log.info "Starting at:          $workflow.start"
 
+if (params.busco) {
+	if (!params.busco_database_dir) {
+		exit 1, "Cannot run Busco without a database directory (--busco_database_dir)"
+	}
+	if (!params.busco_lineage) {
+		exit 1, "Cannot run Busco without a lineage (--busco_lineage)"
+	} 
+	lineage_dir = file("${params.busco_database_dir}/${params.busco_lineage}")
+	if (!lineage_dir.exists()) {
+		exit 1, "Did not find the specified database dir / lineage on this machine"
+	}
+}
+		
 // Enables splitting of CCS read generation into 10 parallel processes
 def chunks = [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 ]
 
@@ -139,6 +160,8 @@ process BamToFastq {
 
 	label 'bam2fastx'
 
+	scratch true
+
         input:
         set file(bam),file(pbi) from mergedReads
 
@@ -164,7 +187,7 @@ process Flye {
 	file(reads) from Reads
 
 	output:
-	file(assembly) into Assembly
+	file(assembly) into ( Assembly, AssemblyBusco )
 	file(assembly_info)
 
 	script:
@@ -188,6 +211,30 @@ process Flye {
 
 }
 
+process Busco {
+
+	publishDir "${params.outdir}/Busco", mode: 'copy'
+
+	label 'busco'
+
+	when:
+	params.busco
+
+	input:
+	file(assembly) from AssemblyBusco
+	
+	output:
+	file(busco_report)
+
+	script:
+	busco_report = "busco/short_summary.txt"
+
+	"""
+		busco -i $assembly -o busco -l ${params.busco_database_dir}/${params.busco_lineage} -m genome -c ${task.cpus} --offline
+	"""
+
+
+}
 process nanoQC {
 
 	label 'nanoqc'
