@@ -28,6 +28,7 @@ Options:
 --hifi			Wether the reads should be treated as hifi (i.e. ultra-high subread coverage)
 --genome_size		Expected genome size 
 --qc			Wether to run quality control steps
+--qc_kat		Enable KAT kmer analysis (may crash...)
 --busco			Run BUSCO assembly
 --busco_lineage		Busco profile to use (e.g. aves_odb10)
 --email                 Provide an Email to which reports are send.
@@ -51,6 +52,7 @@ log.info "Movie:			${params.bam}"
 log.info "IsHifi:			${params.hifi}"
 log.info "Genome size:		${params.genome_size}"
 log.info "Run QC:			${params.qc}"
+log.info "Run KMER Analaysis:	${params.qc_kat}"
 if (params.busco_lineage) {
 	log.info "BUSCO databases:	${params.busco_database_dir}"
 	log.info "BUSCO lineage:		${params.busco_lineage}"
@@ -71,6 +73,7 @@ if (params.busco_lineage) {
 	if (!lineage_dir.exists()) {
 		exit 1, "Did not find the specified database dir / lineage on this machine"
 	}
+	println "Will run BUSCO - make sure you have Miniconda loaded or this will fail...!"
 }
 		
 // Enables splitting of CCS read generation into 10 parallel processes
@@ -224,7 +227,7 @@ process Busco {
 	file(busco_report)
 
 	script:
-	busco_report = "busco/short_summary.txt"
+	busco_report = "busco/short_summary.specific." + params.busco_lineage + ".busco.txt"
 
 	"""
 		busco -i $assembly -o busco -l ${params.busco_database_dir}/${params.busco_lineage} -m genome -c ${task.cpus} --offline
@@ -306,7 +309,7 @@ process KatGCP {
 	label 'kat'
 
 	when:
-	params.qc
+	params.qc_kat
 
 	input:
 	file(reads) from ReadsKat
