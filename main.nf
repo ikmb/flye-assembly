@@ -85,7 +85,7 @@ if (!params.bam) {
 	bamFile = Channel
 		.fromPath(params.bam)
 		.ifEmpty { exit 1, "Could not find an input bam file" }
-		.map { b -> [ file(b), file("${b}.pbi") ] }
+		.map { b -> [ file(b).getBaseName(), file(b), file("${b}.pbi") ] }
 }
 
 if (!params.genome_size) {
@@ -100,7 +100,7 @@ if (params.hifi) {
 
 	process BamToCCS {
 
-		publishDir "${params.outdir}/CCS", mode: 'copy',
+		publishDir "${params.outdir}/${sample}/CCS", mode: 'copy',
 			saveAs: { filename ->
 				if( filename.indexOf("report.txt") > 0 ) filename
 				else null
@@ -111,12 +111,12 @@ if (params.hifi) {
 		label 'pbccs'
 
 		input:
-		set file(bam),file(bam_index) from bamFile
+		set val(sample),file(bam),file(bam_index) from bamFile
 		each chunk from chunks
 
 
 		output:
-		file(reads) into ReadChunks
+		set val(sample),file(reads) into ReadChunks
 		file(report)
 
 		script:
@@ -130,18 +130,20 @@ if (params.hifi) {
 
 	}
 
+	ReadChunksGrouped = ReadChunks.groupTuple()
+
 	process CcsMerge {
 
 		label 'pbbam'
 
 		input:
-		file(read_chunks) from ReadChunks.collect()
+		set val(sample),file(read_chunks) from ReadChunksGrouped
 
 		output:
-		set file(bam),file(pbi) into mergedReads
+		set val(sample),file(bam),file(pbi) into mergedReads
 
 		script:
-		bam = "reads.ccs.bam"
+		bam = sample + ".reads.ccs.bam"
 		pbi = bam + ".pbi"
 
 		"""
@@ -152,7 +154,7 @@ if (params.hifi) {
 
 } else {
 
-	mergedReads = bamFile
+	mergedReads = bamFile.groupTuple()
 
 }
 
@@ -163,10 +165,10 @@ process BamToFastq {
 	scratch true
 
         input:
-        set file(bam),file(pbi) from mergedReads
+        set val(sample),file(bam),file(pbi) from mergedReads
 
         output:
-        file(reads) into (Reads, ReadsNanoqc, ReadsKat, ReadsNanoplot)
+        set val(sample),file(reads) into (Reads, ReadsNanoqc, ReadsKat, ReadsNanoplot)
 
         script:
         reads = bam.getBaseName() + ".fastq.gz"
@@ -179,15 +181,15 @@ process BamToFastq {
 
 process Flye {
 
-	publishDir "${params.outdir}/assembly", mode: 'copy'
+	publishDir "${params.outdir}/${sample}/assembly", mode: 'copy'
 
 	label 'flye'
 
 	input:
-	file(reads) from Reads
+	set val(sample),file(reads) from Reads
 
 	output:
-	file(assembly) into ( Assembly, AssemblyBusco )
+	set val(sample),file(assembly) into ( Assembly, AssemblyBusco )
 	file(assembly_info)
 
 	script:
@@ -206,22 +208,22 @@ process Flye {
 	}
 
 	"""
-		flye $options $reads --genome-size ${params.genome_size} --threads ${task.cpus} --out-dir $folder_name
+		flye $options $reads -i 2 --genome-size ${params.genome_size} --threads ${task.cpus} --out-dir $folder_name
 	"""
 
 }
 
 process Busco {
 
-	publishDir "${params.outdir}/Busco", mode: 'copy'
+	publishDir "${params.outdir}/${sample}/Busco", mode: 'copy'
 
 	label 'busco'
 
 	when:
-	params.busco
+	params.busco_lineage
 
 	input:
-	file(assembly) from AssemblyBusco
+	set val(sample),file(assembly) from AssemblyBusco
 	
 	output:
 	file(busco_report)
@@ -239,13 +241,13 @@ process nanoQC {
 
 	label 'nanoqc'
 
-	publishDir "${params.outdir}/QC", mode: 'copy'
+	publishDir "${params.outdir}/${sample}/QC", mode: 'copy'
 
 	when:
 	params.qc
 
 	input:
-	file(fastq) from ReadsNanoqc
+	set val(sample),file(fastq) from ReadsNanoqc
 
 	output:
 	file(qc_plot)
@@ -262,13 +264,13 @@ process nanoPlot {
 
 	label 'nanoplot'
 
-        publishDir "${params.outdir}/QC", mode: 'copy'
+        publishDir "${params.outdir}/${sample}/QC", mode: 'copy'
 
 	when:
 	params.qc
 
 	input:
-	file(fastq) from ReadsNanoplot
+	set val(sample),file(fastq) from ReadsNanoplot
 
 	output:
 	file("nanoplot")
@@ -281,7 +283,7 @@ process nanoPlot {
 
 process QCN50 {
 
-	publishDir "${params.outdir}/QC", mode: 'copy'
+	publishDir "${params.outdir}/${sample}/QC", mode: 'copy'
 
 	label 'gaas'
 
@@ -289,7 +291,7 @@ process QCN50 {
 	params.qc
 
 	input:
-	file(assembly) from Assembly
+	set val(sample),file(assembly) from Assembly
 
 	output:
 	file(assembly_report)
@@ -304,7 +306,7 @@ process QCN50 {
 
 process KatGCP {
 
-        publishDir "${params.outdir}/QC", mode: 'copy'
+        publishDir "${params.outdir}/${sample}/QC", mode: 'copy'
 
 	label 'kat'
 
@@ -312,7 +314,7 @@ process KatGCP {
 	params.qc_kat
 
 	input:
-	file(reads) from ReadsKat
+	set val(sample),file(reads) from ReadsKat
 
 	output:
 	file(kat_dist) into KatDist
