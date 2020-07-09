@@ -29,6 +29,8 @@ Options:
 --genome_size		Expected genome size 
 --qc			Wether to run quality control steps
 --qc_kat		Enable KAT kmer analysis (may crash...)
+--reference		A reference genome to compare against (also requires --gff)
+--gff			A reference annotation (also requires --reference)
 --busco			Run BUSCO assembly
 --busco_lineage		Busco profile to use (e.g. aves_odb10)
 --email                 Provide an Email to which reports are send.
@@ -65,6 +67,10 @@ if (workflow.containerEngine) {
 log.info "================================================="
 log.info "Starting at:          $workflow.start"
 
+if (params.reference && params.gff) {
+	log.info "Will run QUAST for quality control!"
+}
+
 if (params.busco_lineage) {
 	if (!params.busco_database_dir) {
 		exit 1, "Cannot run Busco without a database directory (--busco_database_dir)"
@@ -79,6 +85,12 @@ if (params.busco_lineage) {
 // Enables splitting of CCS read generation into 10 parallel processes
 def chunks = [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 ]
 
+if (params.reference) {
+	Ref = Channel.fromPath(file(params.reference))
+} else {
+	Ref = Channel.empty()
+}
+
 if (!params.bam) {
 	exit 1, "Must provide a BAM movie file (--bam)"
 } else {
@@ -91,6 +103,7 @@ if (!params.bam) {
 if (!params.genome_size) {
 	exit 1, "Must provide an approximate genome size (--genome_size)"
 }
+
 
 /*
 Start the pipeline here
@@ -162,13 +175,15 @@ process BamToFastq {
 
 	label 'bam2fastx'
 
+	publishDir "${params.outdir}/${sample}/fastq", mode: 'copy'
+
 	scratch true
 
         input:
         set val(sample),file(bam),file(pbi) from mergedReads
 
         output:
-        set val(sample),file(reads) into (Reads, ReadsNanoqc, ReadsKat, ReadsNanoplot)
+        set val(sample),file(reads) into (Reads, ReadsNanoqc, ReadsKat, ReadsNanoplot, ReadsAlign)
 
         script:
         reads = bam.getBaseName() + ".fastq.gz"
@@ -190,6 +205,7 @@ process Flye {
 
 	output:
 	set val(sample),file(assembly) into ( Assembly, AssemblyBusco )
+	file(assembly_renamed) into AssemblyQuast
 	file(assembly_info)
 
 	script:
@@ -199,6 +215,7 @@ process Flye {
 	}
 	assembly = folder_name + "/assembly.fasta"
 	assembly_info = folder_name + "/assembly_info.txt"
+	assembly_renamed = sample + ".assembly.fasta"
 
 	def options
 	if (params.hifi) {
@@ -209,6 +226,7 @@ process Flye {
 
 	"""
 		flye $options $reads -i 2 --genome-size ${params.genome_size} --threads ${task.cpus} --out-dir $folder_name
+		cp $assembly $assembly_renamed
 	"""
 
 }
@@ -327,3 +345,75 @@ process KatGCP {
 	"""
 
 }
+
+process Quast {
+
+	publishDir "${params.outdir}/Quast", mode: 'copy'
+
+	label 'quast' 
+
+	when:
+	params.reference && params.gff
+
+	input:
+	file(assemblies) from AssemblyQuast.collect()
+
+	output:
+	file(quast_dir)
+
+	script:
+	quast_dir = "quast"
+	"""
+		quast -o $quast_dir -r ${params.reference} --features ${params.gff} --threads ${task.cpus} $assemblies
+	"""
+
+}
+
+process makeRef {
+
+	label 'map'
+
+	when:
+	params.reference
+
+	input:
+	file(fasta) from Ref
+
+	output:
+	set file(idx),file(fasta) into RefMap
+
+	script:
+	idx = fasta.getBaseName() + ".idx"
+
+	"""
+		minimap2 -d $idx $fasta
+	"""
+}
+
+process Minimap {
+
+	label 'map'
+
+	publishDir "${params.outdir}/${sample}/Mapping", mode: 'copy'
+
+	when:
+	params.reference 
+
+	input:
+	set val(sample),file(reads) from ReadsAlign
+	set file(idx),file(fasta) from RefMap.collect()
+
+	output:
+	set val(sample),file(bam),file(bai)
+
+	script:
+	bam = reads.getBaseName() + ".bam"
+	bai = bam + ".bai"
+
+	"""
+		minimap2 -ax map-pb $idx $reads | samtools sort -m 8G - | samtools view -bh -o $bam -
+		samtools index $bam
+	"""
+
+}
+
