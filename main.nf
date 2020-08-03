@@ -149,6 +149,8 @@ if (params.hifi) {
 
 		label 'pbbam'
 
+		publishDir "${params.outdir}/${sample}/CCS", mode: 'copy',
+
 		input:
 		set val(sample),file(read_chunks) from ReadChunksGrouped
 
