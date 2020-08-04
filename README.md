@@ -14,6 +14,9 @@ Assembles genomes from Pacbio reads using Flye
 ### `--qc`
 Switch on QC options - will generate information about the input reads and the resulting assembly
 
+### `--qc_kat`
+Run the KAT Kmer analysis 
+
 ### `--hifi`
 Treat input movie as "hifi", and perform CCS generation prior to assembly
 
@@ -39,3 +42,12 @@ Switches on BUSCO to gauge gene space coverage and specifies which reference dat
 * primates_odb10
 * tetrapoda_odb10
 
+### `--reference`
+This read data is from a previously sequenced species - use this reference genome for comparative analysis. 
+
+* MiniMap read alignments and coverage analysis
+
+### `--gff`
+This read data is from a previously sequenced specues - this this reference gene annotation for comparative analysis.
+
+* QUAST (requires --reference)
