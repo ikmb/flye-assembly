@@ -20,9 +20,10 @@ A typical command to run this pipeline would be:
 
 nextflow run ikmb/flye-assembly --bam movie.bam --genome_size 1.3g --qc
 
-Mandatory arguments:
+Mandatory arguments (one of):
 
---bam			A PacBio movie file in BAM format
+--samples		A sample sheet with information on project and location of associated movies
+--bam			A movie file in BAM format (must be accompanied by a .pbi index file)
 
 Options:
 --hifi			Wether the reads should be treated as hifi (i.e. ultra-high subread coverage)
@@ -31,7 +32,6 @@ Options:
 --qc_kat		Enable KAT kmer analysis (may crash...)
 --reference		A reference genome to compare against (also requires --gff)
 --gff			A reference annotation (also requires --reference)
---busco			Run BUSCO assembly
 --busco_lineage		Busco profile to use (e.g. aves_odb10)
 --email                 Provide an Email to which reports are send.
 --skip_multiqc          Do not generate a QC report
@@ -50,7 +50,12 @@ log.info "Nextflow Version:     $workflow.nextflow.version"
 log.info "Command Line:         $workflow.commandLine"
 log.info "Authors:              M. Höppner"
 log.info "=================================================="
-log.info "Movie:			${params.bam}"
+if (params.samples) {
+	log.info "SampleSheet:			${params.samples}"
+}
+if (params.bam) {
+	log.info "Movie file:			${params.bam}"
+}
 log.info "IsHifi:			${params.hifi}"
 log.info "Genome size:		${params.genome_size}"
 log.info "Run QC:			${params.qc}"
@@ -58,8 +63,6 @@ log.info "Run KMER Analaysis:	${params.qc_kat}"
 if (params.busco_lineage) {
 	log.info "BUSCO databases:	${params.busco_database_dir}"
 	log.info "BUSCO lineage:		${params.busco_lineage}"
-} else {
-	log.info "Run BUSCO:		${params.busco}"
 }
 if (workflow.containerEngine) {
         log.info "Container engine:     	${workflow.containerEngine}"
@@ -91,13 +94,31 @@ if (params.reference) {
 	Ref = Channel.empty()
 }
 
-if (!params.bam) {
-	exit 1, "Must provide a BAM movie file (--bam)"
-} else {
+def returnFile(it) {
+    // Return file if it exists
+    inputFile = file(it)
+    if (!file(inputFile).exists()) exit 1, "Missing file in TSV file: ${inputFile}, see --help for more information"
+    return inputFile
+}
+
+if (params.bam) {
 	bamFile = Channel
 		.fromPath(params.bam)
 		.ifEmpty { exit 1, "Could not find an input bam file" }
 		.map { b -> [ file(b).getBaseName(), file(b), file("${b}.pbi") ] }
+} else if (params.samples) {
+	// Read sample file
+	bamFile = Channel.from(file(params.samples))
+	       	.splitCsv(sep: ';', header: true)
+		.map { row -> 
+			def project_name = row.ProjectID
+			def movie = returnFile( row.Movie )
+			def movie_index = returnFile( row.MovieIndex )
+			[ project_name, movie, movie_index ]
+		}
+
+} else {
+        exit 1, "Must provide a sample sheet or a movie in BAM format (see documentation for details)"
 }
 
 if (!params.genome_size) {
@@ -124,9 +145,8 @@ if (params.hifi) {
 		label 'pbccs'
 
 		input:
-		set val(sample),file(bam),file(bam_index) from bamFile
+		set val(sample), file(bam), file(bam_index) from bamFile
 		each chunk from chunks
-
 
 		output:
 		set val(sample),file(reads) into ReadChunks
@@ -149,7 +169,7 @@ if (params.hifi) {
 
 		label 'pbbam'
 
-		publishDir "${params.outdir}/${sample}/CCS", mode: 'copy',
+		publishDir "${params.outdir}/${sample}/CCS", mode: 'copy'
 
 		input:
 		set val(sample),file(read_chunks) from ReadChunksGrouped
@@ -169,7 +189,7 @@ if (params.hifi) {
 
 } else {
 
-	mergedReads = bamFile.groupTuple()
+	mergedReads = bamFile
 
 }
 
@@ -196,6 +216,8 @@ process BamToFastq {
 
 }
 
+grouped_movies = Reads.groupTuple()
+
 process Flye {
 
 	publishDir "${params.outdir}/${sample}/assembly", mode: 'copy'
@@ -203,7 +225,7 @@ process Flye {
 	label 'flye'
 
 	input:
-	set val(sample),file(reads) from Reads
+	set val(sample),file(reads) from grouped_movies
 
 	output:
 	set val(sample),file(assembly) into ( Assembly, AssemblyBusco )
