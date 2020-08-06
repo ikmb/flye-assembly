@@ -25,7 +25,8 @@ abort "Folder not found (#{options.folder})" unless File.directory?(options.fold
 date = Time.now.strftime("%Y-%m-%d")
 options.centre ? center = options.centre : center = "IKMB"
 
-movies = Dir["#{options.folder}/*.bam"]
+options.folder.gsub!(/\/$/, '')
+movies = Dir["#{options.folder}/*.bam"].collect{|m| m.gsub(/\/$/, '') }
 
 sample_name = "AssemblyProject1"
 
