@@ -22,7 +22,7 @@ nextflow run ikmb/flye-assembly --bam movie.bam --genome_size 1.3g --qc
 
 Mandatory arguments:
 
---bam			A PacBio movie file in BAM format
+--samples		A sample sheet with information on project and location of associated movies
 
 Options:
 --hifi			Wether the reads should be treated as hifi (i.e. ultra-high subread coverage)
@@ -50,7 +50,7 @@ log.info "Nextflow Version:     $workflow.nextflow.version"
 log.info "Command Line:         $workflow.commandLine"
 log.info "Authors:              M. Höppner"
 log.info "=================================================="
-log.info "Movie:			${params.bam}"
+log.info "SampleSheet:			${params.samples}"
 log.info "IsHifi:			${params.hifi}"
 log.info "Genome size:		${params.genome_size}"
 log.info "Run QC:			${params.qc}"
@@ -91,13 +91,13 @@ if (params.reference) {
 	Ref = Channel.empty()
 }
 
-if (!params.bam) {
-	exit 1, "Must provide a BAM movie file (--bam)"
+if (!params.samples) {
+	exit 1, "Must provide a sample sheet (see documentation for details)"
 } else {
-	bamFile = Channel
-		.fromPath(params.bam)
-		.ifEmpty { exit 1, "Could not find an input bam file" }
-		.map { b -> [ file(b).getBaseName(), file(b), file("${b}.pbi") ] }
+	// Read sample file
+	Channel.from(file(params.samples))
+       	.splitCsv(sep: ';', header: true)
+       	.set {  bamFile }
 }
 
 if (!params.genome_size) {
@@ -108,6 +108,7 @@ if (!params.genome_size) {
 /*
 Start the pipeline here
 */
+
 
 if (params.hifi) {
 
@@ -124,17 +125,16 @@ if (params.hifi) {
 		label 'pbccs'
 
 		input:
-		set val(sample),file(bam),file(bam_index) from bamFile
+		set sample, bam, bam_index from bamFile
 		each chunk from chunks
-
 
 		output:
 		set val(sample),file(reads) into ReadChunks
 		file(report)
 
 		script:
-		reads = bam.getBaseName() + "." + chunk + ".ccs.bam"
-		report = bam.getBaseName() + "." + chunk + ".ccs.report.txt"
+		reads = file(bam).getBaseName() + "." + chunk + ".ccs.bam"
+		report = file(bam).getBaseName() + "." + chunk + ".ccs.report.txt"
 
 		"""
 			ccs $bam $reads --chunk $chunk/10 -j ${task.cpus}
@@ -149,7 +149,7 @@ if (params.hifi) {
 
 		label 'pbbam'
 
-		publishDir "${params.outdir}/${sample}/CCS", mode: 'copy',
+		publishDir "${params.outdir}/${sample}/CCS", mode: 'copy'
 
 		input:
 		set val(sample),file(read_chunks) from ReadChunksGrouped
@@ -169,7 +169,7 @@ if (params.hifi) {
 
 } else {
 
-	mergedReads = bamFile.groupTuple()
+	mergedReads = bamFile
 
 }
 
@@ -196,6 +196,8 @@ process BamToFastq {
 
 }
 
+grouped_movies = Reads.groupTuple()
+
 process Flye {
 
 	publishDir "${params.outdir}/${sample}/assembly", mode: 'copy'
@@ -203,7 +205,7 @@ process Flye {
 	label 'flye'
 
 	input:
-	set val(sample),file(reads) from Reads
+	set val(sample),file(reads) from grouped_movies
 
 	output:
 	set val(sample),file(assembly) into ( Assembly, AssemblyBusco )
