@@ -32,7 +32,6 @@ Options:
 --qc_kat		Enable KAT kmer analysis (may crash...)
 --reference		A reference genome to compare against (also requires --gff)
 --gff			A reference annotation (also requires --reference)
---busco_lineage		Busco profile to use (e.g. aves_odb10)
 --email                 Provide an Email to which reports are send.
 --skip_multiqc          Do not generate a QC report
 """.stripIndent()
@@ -60,10 +59,6 @@ log.info "IsHifi:			${params.hifi}"
 log.info "Genome size:		${params.genome_size}"
 log.info "Run QC:			${params.qc}"
 log.info "Run KMER Analaysis:	${params.qc_kat}"
-if (params.busco_lineage) {
-	log.info "BUSCO databases:	${params.busco_database_dir}"
-	log.info "BUSCO lineage:		${params.busco_lineage}"
-}
 if (workflow.containerEngine) {
         log.info "Container engine:     	${workflow.containerEngine}"
 }
@@ -255,30 +250,6 @@ process Flye {
 
 }
 
-process Busco {
-
-	publishDir "${params.outdir}/${sample}/Busco", mode: 'copy'
-
-	label 'busco'
-
-	when:
-	params.busco_lineage
-
-	input:
-	set val(sample),file(assembly) from AssemblyBusco
-	
-	output:
-	file(busco_report)
-
-	script:
-	busco_report = "busco/short_summary.specific." + params.busco_lineage + ".busco.txt"
-
-	"""
-		busco -i $assembly -o busco -l ${params.busco_database_dir}/${params.busco_lineage} -m genome -c ${task.cpus} --offline
-	"""
-
-
-}
 process nanoQC {
 
 	label 'nanoqc'

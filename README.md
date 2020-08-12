@@ -11,6 +11,19 @@ Assembles genomes from Pacbio reads using Flye
 
 ## Options
 
+### `--bam`
+A movie file in BAM format (mutually exclusive with --samples)
+
+### `--samples`
+A CSV formatted sample sheet, using the following format:
+
+`projectID;Movie;MovieIndex
+MyGenome1;/path/to/movie.bam;/path/to/movie.bam.pbi
+`
+
+Add any number of movies to this list; all movies that share a project ID will be assembled together. Note that if you plan on assembling multiple genomes
+using this approach, they need to share a genome size (at least roughly). 
+
 ### `--qc`
 Switch on QC options - will generate information about the input reads and the resulting assembly
 
