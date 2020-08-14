@@ -53,7 +53,7 @@ if (params.samples) {
 	log.info "SampleSheet:			${params.samples}"
 }
 if (params.bam) {
-	log.info "Movie file:			${params.bam}"
+	log.info "Movie file:		${params.bam}"
 }
 log.info "IsHifi:			${params.hifi}"
 log.info "Genome size:		${params.genome_size}"
@@ -67,17 +67,6 @@ log.info "Starting at:          $workflow.start"
 
 if (params.reference && params.gff) {
 	log.info "Will run QUAST for quality control!"
-}
-
-if (params.busco_lineage) {
-	if (!params.busco_database_dir) {
-		exit 1, "Cannot run Busco without a database directory (--busco_database_dir)"
-	}
-	lineage_dir = file("${params.busco_database_dir}/${params.busco_lineage}")
-	if (!lineage_dir.exists()) {
-		exit 1, "Did not find the specified database dir / lineage on this machine"
-	}
-	println "Will run BUSCO - make sure you have Miniconda loaded or this will fail...!"
 }
 		
 // Enables splitting of CCS read generation into 10 parallel processes
@@ -229,6 +218,7 @@ process Flye {
 
 	script:
 	folder_name = "flye_assembly"
+	run_options = ""
 	if (params.hifi) {
 		folder_name = "flye_assembly_hifi"
 	}
@@ -240,7 +230,7 @@ process Flye {
 	if (params.hifi) {
 		options = "--pacbio-hifi"
 	} else {
-		options = "--pacbio-raw"
+		options = "--asm-coverage 40 --pacbio-raw"
 	}
 
 	"""
