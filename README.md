@@ -7,7 +7,7 @@ Assembles genomes from Pacbio reads using Flye
 
 ### Basic execution
 
-`nextflow run ikmb/flye-assembly --bam /path/to/pacbio-movie.bam` --genome_size 1.2g
+`nextflow run ikmb/flye-assembly --bam /path/to/pacbio-movie.bam --genome_size 1.2g`
 
 This requires Nextflow and Singularity. 
 
@@ -20,6 +20,7 @@ A single movie file in BAM format (mutually exclusive with --samples). If you ha
 A CSV formatted sample sheet, using the following format:
 
 `projectID;Movie;MovieIndex
+
 MyGenome1;/path/to/movie.bam;/path/to/movie.bam.pbi
 `
 
