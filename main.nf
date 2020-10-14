@@ -23,6 +23,7 @@ nextflow run ikmb/flye-assembly --bam movie.bam --genome_size 1.3g --qc
 Mandatory arguments (one of):
 
 --samples		A sample sheet with information on project and location of associated movies
+OR
 --bam			A movie file in BAM format (must be accompanied by a .pbi index file)
 
 Options:

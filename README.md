@@ -7,12 +7,14 @@ Assembles genomes from Pacbio reads using Flye
 
 ### Basic execution
 
-`nextflow run ikmb/flye-assembly --bam /path/to/pacbio-movie.bam`
+`nextflow run ikmb/flye-assembly --bam /path/to/pacbio-movie.bam` --genome_size 1.2g
+
+This requires Nextflow and Singularity. 
 
 ## Options
 
 ### `--bam`
-A movie file in BAM format (mutually exclusive with --samples)
+A single movie file in BAM format (mutually exclusive with --samples). If you have multiple movies belonging to the same or different sequencing project/species, see the `--samples` option instead. 
 
 ### `--samples`
 A CSV formatted sample sheet, using the following format:
@@ -22,7 +24,14 @@ MyGenome1;/path/to/movie.bam;/path/to/movie.bam.pbi
 `
 
 Add any number of movies to this list; all movies that share a project ID will be assembled together. Note that if you plan on assembling multiple genomes
-using this approach, they need to share a genome size (at least roughly). 
+using this approach, they need to share a genome size (at least roughly, i.e. within a factor of 2 or so). 
+
+### `--genome_size`
+The expected size of the genome(s) to be assembled. This option understands "g" and "m" to denote gigabases or megabases.
+
+`--genome_size 1.3g` genome is expected to be 1.3 gigabases in size.
+
+Note that the genome size only needs to be roughly accurate (within a factor of ~2).
 
 ### `--qc`
 Switch on QC options - will generate information about the input reads and the resulting assembly
