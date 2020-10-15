@@ -231,7 +231,7 @@ process Flye {
 	if (params.hifi) {
 		options = "--pacbio-hifi"
 	} else {
-		options = "--asm-coverage 40 --pacbio-raw"
+		options = "--asm-coverage 60 --pacbio-raw"
 	}
 
 	"""
