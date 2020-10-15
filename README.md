@@ -53,3 +53,11 @@ This read data is from a previously sequenced species - use this reference genom
 This read data is from a previously sequenced specues - this this reference gene annotation for comparative analysis.
 
 * QUAST (requires --reference)
+
+### `-profile`
+The execution profile to use. Defaults to "standard", which corresponds to the Medcluster. 
+
+* standard  - CAU Medcluster
+* assembly - IKMB assembly machine
+
+
