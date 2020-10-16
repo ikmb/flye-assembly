@@ -28,7 +28,8 @@ OR
 
 Options:
 --hifi			Wether the reads should be treated as hifi (i.e. ultra-high subread coverage)
---genome_size		Expected genome size 
+--large			Genome is expected to be very large (human-sized or larger)
+--genome_size		Expected genome size (optional, but needed to downsample during assembly process)
 --qc			Wether to run quality control steps
 --qc_kat		Enable KAT kmer analysis (may crash...)
 --reference		A reference genome to compare against (also requires --gff)
@@ -51,13 +52,15 @@ log.info "Command Line:         $workflow.commandLine"
 log.info "Authors:              M. Höppner"
 log.info "=================================================="
 if (params.samples) {
-	log.info "SampleSheet:			${params.samples}"
+	log.info "SampleSheet:		${params.samples}"
 }
 if (params.bam) {
 	log.info "Movie file:		${params.bam}"
 }
 log.info "IsHifi:			${params.hifi}"
-log.info "Genome size:		${params.genome_size}"
+if (params.genome_size) {
+	log.info "Genome size:		${params.genome_size}"
+}
 log.info "Run QC:			${params.qc}"
 log.info "Run KMER Analaysis:	${params.qc_kat}"
 if (workflow.containerEngine) {
@@ -106,10 +109,10 @@ if (params.bam) {
         exit 1, "Must provide a sample sheet or a movie in BAM format (see documentation for details)"
 }
 
-if (!params.genome_size) {
-	exit 1, "Must provide an approximate genome size (--genome_size)"
+if (params.large) {
+	params.flye_memory = "1500.GB"
+	params.flye_cpus = 32
 }
-
 
 /*
 Start the pipeline here
@@ -215,7 +218,7 @@ process Flye {
 	output:
 	set val(sample),file(assembly) into ( Assembly, AssemblyBusco )
 	file(assembly_renamed) into AssemblyQuast
-	file(assembly_info)
+	file("${folder_name}/*")
 
 	script:
 	folder_name = "flye_assembly"
@@ -227,15 +230,19 @@ process Flye {
 	assembly_info = folder_name + "/assembly_info.txt"
 	assembly_renamed = sample + ".assembly.fasta"
 
-	def options
+	def options = ""
+	if (params.genome_size) {
+                options = "--genome-size ${params.genome_size} --asm-coverage 60"
+        }
+
 	if (params.hifi) {
-		options = "--pacbio-hifi"
+		options = options + " --hifi-error --pacbio-hifi"
 	} else {
-		options = "--asm-coverage 60 --pacbio-raw"
+		options = options + " --pacbio-raw"
 	}
 
 	"""
-		flye $options $reads -i 2 --genome-size ${params.genome_size} --threads ${task.cpus} --out-dir $folder_name
+		flye $options $reads -i 2 --threads ${task.cpus} --out-dir $folder_name
 		cp $assembly $assembly_renamed
 	"""
 
