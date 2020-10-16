@@ -236,7 +236,7 @@ process Flye {
         }
 
 	if (params.hifi) {
-		options = options + " --hifi-error --pacbio-hifi"
+		options = options + " --pacbio-hifi"
 	} else {
 		options = options + " --pacbio-raw"
 	}
