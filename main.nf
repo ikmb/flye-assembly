@@ -109,11 +109,10 @@ if (params.bam) {
         exit 1, "Must provide a sample sheet or a movie in BAM format (see documentation for details)"
 }
 
-if (params.large) {
-	params.flye_memory = "1500.GB"
-	params.flye_cpus = 32
+if (params.qc_kat && !params.hifi) {
+	params.qc_kat = false
+	log.info "Requested to run Kat QC analysis, but this is only available for HiFi reads - request disabled!"
 }
-
 /*
 Start the pipeline here
 */
@@ -206,45 +205,92 @@ process BamToFastq {
 
 grouped_movies = Reads.groupTuple()
 
-process Flye {
+if (params.large) {
 
-	publishDir "${params.outdir}/${sample}/assembly", mode: 'copy'
+        process FlyeLarge {
 
-	label 'flye'
+                publishDir "${params.outdir}/${sample}/assembly", mode: 'copy'
 
-	input:
-	set val(sample),file(reads) from grouped_movies
+                label 'flye'
 
-	output:
-	set val(sample),file(assembly) into ( Assembly, AssemblyBusco )
-	file(assembly_renamed) into AssemblyQuast
-	file("${folder_name}/*")
+                input:
+                set val(sample),file(reads) from grouped_movies
 
-	script:
-	folder_name = "flye_assembly"
-	run_options = ""
-	if (params.hifi) {
-		folder_name = "flye_assembly_hifi"
+                output:
+                set val(sample),file(assembly) into ( Assembly, AssemblyBusco )
+                file(assembly_renamed) into AssemblyQuast
+                file("${folder_name}/*")
+
+                script:
+                folder_name = "flye_assembly"
+                run_options = ""
+                if (params.hifi) {
+                        folder_name = "flye_assembly_hifi"
+                }
+                assembly = folder_name + "/assembly.fasta"
+                assembly_info = folder_name + "/assembly_info.txt"
+                assembly_renamed = sample + ".assembly.fasta"
+
+                def options = ""
+                if (params.genome_size) {
+                        options = "--genome-size ${params.genome_size} --asm-coverage 60"
+                }
+
+                if (params.hifi) {
+                        options = options + " --pacbio-hifi"
+                } else {
+                        options = options + " --pacbio-raw"
+                }
+
+                """
+                        flye $options $reads -i 2 --threads ${task.cpus} --out-dir $folder_name
+                        cp $assembly $assembly_renamed
+                """
+
 	}
-	assembly = folder_name + "/assembly.fasta"
-	assembly_info = folder_name + "/assembly_info.txt"
-	assembly_renamed = sample + ".assembly.fasta"
 
-	def options = ""
-	if (params.genome_size) {
-                options = "--genome-size ${params.genome_size} --asm-coverage 60"
-        }
+} else {
+	process Flye {
 
-	if (params.hifi) {
-		options = options + " --pacbio-hifi"
-	} else {
-		options = options + " --pacbio-raw"
+		publishDir "${params.outdir}/${sample}/assembly", mode: 'copy'
+
+		label 'flye'
+
+		input:
+		set val(sample),file(reads) from grouped_movies
+
+		output:
+		set val(sample),file(assembly) into ( Assembly, AssemblyBusco )
+		file(assembly_renamed) into AssemblyQuast
+		file("${folder_name}/*")
+
+		script:
+		folder_name = "flye_assembly"
+		run_options = ""
+		if (params.hifi) {
+			folder_name = "flye_assembly_hifi"
+		}
+		assembly = folder_name + "/assembly.fasta"
+		assembly_info = folder_name + "/assembly_info.txt"
+		assembly_renamed = sample + ".assembly.fasta"
+
+		def options = ""
+		if (params.genome_size) {
+                	options = "--genome-size ${params.genome_size} --asm-coverage 60"
+	        }
+
+		if (params.hifi) {
+			options = options + " --pacbio-hifi"
+		} else {
+			options = options + " --pacbio-raw"
+		}
+
+		"""	
+			flye $options $reads -i 2 --threads ${task.cpus} --out-dir $folder_name
+			cp $assembly $assembly_renamed
+		"""
+
 	}
-
-	"""
-		flye $options $reads -i 2 --threads ${task.cpus} --out-dir $folder_name
-		cp $assembly $assembly_renamed
-	"""
 
 }
 
