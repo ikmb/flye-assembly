@@ -257,7 +257,7 @@ if (params.trimming) {
 
 ReadsFinal
 	.groupTuple()
-	.into { grouped_movies; grouped_movies_canu }
+	.into { grouped_movies; grouped_movies_canu; grouped_movies_hifiasm }
 
 
 if (params.hifiasm) {
@@ -425,11 +425,11 @@ if (params.canu) {
 
 		output:
 		file("canu")
-		file (report)
+		file (report_canu)
 		set val(sample),file(assembly) into (CanuAssembly, CanuAssemblyQuast)
 
 		script:	
-		report = "canu/canu.report"
+		report_canu = "canu/canu.report"
 		assembly = sample + ".contigs.fasta"
 
 		def options = ""
