@@ -46,6 +46,9 @@ Switch on QC options - will generate information about the input reads and the r
 ### `--qc_kat`
 Run the KAT Kmer analysis 
 
+### `--trimming`
+Remove 15bp from both ends of each read. Do this, if you suspect that reads retain adapter/barcode fragments. 
+
 ### `--hifi`
 Treat input movie as "hifi", and perform CCS generation prior to assembly
 
