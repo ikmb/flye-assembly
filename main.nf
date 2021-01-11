@@ -287,6 +287,8 @@ if (params.hifiasm) {
 
 	process GfaToFasta {
 
+                publishDir "${params.outdir}/${sample}/assembly/hifiasm", mode: 'copy'
+
 		input:
 		set val(sample),file(assembly_graph) from HifiasmGraph
 
@@ -295,10 +297,10 @@ if (params.hifiasm) {
 
 		script:
 
-		assembly = assembly_graph.getBaseName() + ".fasta"
+		assembly = assembly_graph.getBaseName() + ".hifiasm.fasta"
 
 		"""
-			awk '/^S/{print ">"\$2"\n"\$3}' $assembly_graph | fold > $assembly
+			awk '/^S/{print ">"\$2;print \$3}' $assembly_graph  > $assembly
 		"""
 	}
 
@@ -313,7 +315,7 @@ if (params.flye) {
 
         	process FlyeLarge {
 
-	                publishDir "${params.outdir}/${sample}/assembly", mode: 'copy'
+	                publishDir "${params.outdir}/${sample}/assembly/flye", mode: 'copy'
 
         	        label 'flye'
 
@@ -323,8 +325,8 @@ if (params.flye) {
         	        set val(sample),file(reads) from grouped_movies
 
                 	output:
-	                set val(sample),file(assembly) into ( Assembly, AssemblyBusco )
-        	        file(assembly_renamed) into AssemblyQuast
+	                set val(sample),file(assembly) into ( FlyeAssembly, FlyeAssemblyBusco )
+        	        file(assembly_renamed) into FlyeAssemblyQuast
                 	file("${folder_name}/*")
 
 	                script:
@@ -335,7 +337,7 @@ if (params.flye) {
                 	}
 	                assembly = folder_name + "/assembly.fasta"
         	        assembly_info = folder_name + "/assembly_info.txt"
-                	assembly_renamed = sample + ".assembly.fasta"
+                	assembly_renamed = sample + ".flye.assembly.fasta"
 
 	                def options = ""
         	        if (params.genome_size) {
@@ -358,7 +360,7 @@ if (params.flye) {
 	} else {
 		process Flye {
 
-			publishDir "${params.outdir}/${sample}/assembly", mode: 'copy'
+			publishDir "${params.outdir}/${sample}/assembly/flye", mode: 'copy'
 
 			label 'flye'
 	
@@ -380,7 +382,7 @@ if (params.flye) {
 			}
 			assembly = folder_name + "/assembly.fasta"
 			assembly_info = folder_name + "/assembly_info.txt"
-			assembly_renamed = sample + ".assembly.fasta"
+			assembly_renamed = sample + ".flye.assembly.fasta"
 
 			def options = ""
 			if (params.genome_size) {
@@ -430,7 +432,7 @@ if (params.canu) {
 
 		script:	
 		report_canu = "canu/canu.report"
-		assembly = sample + ".contigs.fasta"
+		assembly = sample + ".canu.contigs.fasta"
 
 		def options = ""
 		if (params.hifi) {
