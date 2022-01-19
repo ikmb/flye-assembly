@@ -27,9 +27,9 @@ OR
 --bam			A movie file in BAM format (must be accompanied by a .pbi index file)
 
 Options:
---canu			Run the CANU assembler (requires --genome_size)
 --flye			Run the Flye assembler
 --hifiasm		Run the HiFiASM assembler (requires --hifi)
+--ipa			Run the PacBio IPA assembler (requires --hifi)
 --hifi			Wether the reads should be treated as hifi (i.e. ultra-high subread coverage)
 --large			Genome is expected to be very large (human-sized or larger)
 --genome_size		Expected genome size (optional, but needed to downsample during assembly process)
@@ -55,7 +55,7 @@ log.info "Nextflow Version:     $workflow.nextflow.version"
 log.info "Command Line:         $workflow.commandLine"
 log.info "Authors:              M. Höppner"
 log.info "=================================================="
-log.info "Assemblers:		Flye: ${params.flye}, Canu: ${params.canu}, HiFiAsm: ${params.hifiasm}"
+log.info "Assemblers:		Flye: ${params.flye}, Canu: ${params.canu}, HiFiAsm: ${params.hifiasm}, IPA: ${params.ipa}"
 if (params.samples) {
 	log.info "SampleSheet:		${params.samples}"
 }
@@ -123,8 +123,8 @@ if (params.qc_kat && !params.hifi) {
 }
 
 // Validate assembler options
-if (!params.canu && !params.flye && !params.hifiasm) {
-	exit 1, "Must specify at least one assembly algorithm (flye, canu,hifiasm)"
+if (!params.canu && !params.flye && !params.hifiasm && !params.ipa) {
+	exit 1, "Must specify at least one assembly algorithm (flye, canu,hifiasm, ipa)"
 }
 
 if (params.canu && !params.genome_size) {
@@ -133,6 +133,9 @@ if (params.canu && !params.genome_size) {
 
 if (params.hifiasm && !params.hifi) {
 	exit 1, "The HifiASM assembler requires HiFi reads (--hifi)"
+}
+if(params.ipa && !params.hifi) {
+	exit 1, "The IPA assembler requires HiFi reads (--hifi)"
 }
 
 /*
@@ -151,7 +154,7 @@ if (params.hifi) {
 
 		scratch true 
 
-		label 'pbccs'
+		label 'pacbio'
 
 		input:
 		set val(sample), file(bam), file(bam_index) from bamFile
@@ -172,7 +175,7 @@ if (params.hifi) {
 		
 		"""
 			ccs $options $bam $reads --chunk $chunk/10 -j ${task.cpus}
-			mv ccs_report.txt $report
+			mv *report.txt $report
 		"""
 
 	}
@@ -181,7 +184,7 @@ if (params.hifi) {
 
 	process CcsMerge {
 
-		label 'pbbam'
+		label 'pacbio'
 
 		publishDir "${params.outdir}/${sample}/CCS", mode: 'copy'
 
@@ -189,7 +192,7 @@ if (params.hifi) {
 		set val(sample),file(read_chunks) from ReadChunksGrouped
 
 		output:
-		set val(sample),file(bam),file(pbi) into mergedReads
+		set val(sample),file(bam),file(pbi) into CCSReads
 
 		script:
 		bam = sample + ".reads.ccs.bam"
@@ -201,6 +204,29 @@ if (params.hifi) {
 		"""
 	}
 
+	process ExtractHiFi {
+
+		label 'pacbio'
+
+                publishDir "${params.outdir}/${sample}/HiFi", mode: 'copy'
+
+		input:
+                set val(sample),file(bam),file(pbi) from CCSReads
+
+		output:
+		set val(sample),file(hifi),file(hifi_pbi) into mergedReads
+
+		script:
+		hifi = bam.getBaseName() + ".hifi.bam"
+		hifi_pbi = hifi + ".pbi"
+
+		"""
+			exctracthifi $bam $hifi
+			pbindex $hifi
+		"""
+
+	}
+
 } else {
 
 	mergedReads = bamFile
@@ -209,9 +235,9 @@ if (params.hifi) {
 
 process BamToFastq {
 
-	label 'bam2fastx'
+	label 'pacbio'
 
-	publishDir "${params.outdir}/${sample}/fastq", mode: 'copy'
+	publishDir "${params.outdir}/${sample}/fasta", mode: 'copy'
 
 	scratch true
 
@@ -225,7 +251,7 @@ process BamToFastq {
         reads = bam.getBaseName() + ".fastq.gz"
 
         """
-        	bam2fastq -o ${bam.getBaseName()} $bam
+        	bam2fasta -o ${bam.getBaseName()} $bam
         """
 
 }
@@ -246,7 +272,7 @@ if (params.trimming) {
 		trimmed_reads = reads.getBaseName() + ".trimmed.fastq.gz"
 
 		"""
-			fastp -i $reads -o $trimmed_reads --disable_adapter_trimming -f 15 -t 15 -Q -L -w ${task.cpus}
+			fastp -i $reads -o $trimmed_reads --disable_adapter_trimming -f 30 -t 30 -Q -L -w ${task.cpus}
 		"""
 	}
 } else {
@@ -257,7 +283,7 @@ if (params.trimming) {
 
 ReadsFinal
 	.groupTuple()
-	.into { grouped_movies; grouped_movies_canu; grouped_movies_hifiasm }
+	.into { grouped_movies; grouped_movies_canu; grouped_movies_hifiasm; grouped_movies_ipa }
 
 
 if (params.hifiasm) {
@@ -307,6 +333,38 @@ if (params.hifiasm) {
 } else {
 	HifiasmAssembly = Channel.empty()
 	HifiasmAssemblyQuast = Channel.empty()
+}
+
+if (params.ipa) {
+
+	process IPA {
+
+		publishDir "${params.outdir}/${sample}/assembly/flye", mode: 'copy'
+
+		label 'ipa'
+
+		scratch true
+
+		input:
+		set val(sample),file(reads) from grouped_movies_ipa
+
+		output:
+		set val(sample),file(assembly) into ( IpaAssembly, IpaAssemblyQuast)
+
+		script:
+
+		assembly = sample + ".ipa.fa"
+
+		"""
+			ipa local --run-dir ipa_run -i $reads --nthreads ${task.cpus}
+			cp ipa_run/assembly-results/final.p_ctg.fasta $assembly
+		"""
+
+	}
+} else {
+
+	IpaAssembly = Channel.empty()
+	IpaAssemblyQuast = Channel.empty()
 }
 
 if (params.flye) {
@@ -499,8 +557,8 @@ process nanoPlot {
 	"""	
 }
 
-Assembly = FlyeAssembly.concat(CanuAssembly).concat(HifiasmAssembly)
-AssemblyQuast = FlyeAssemblyQuast.concat(CanuAssemblyQuast).concat(HifiasmAssemblyQuast)
+Assembly = FlyeAssembly.concat(CanuAssembly).concat(HifiasmAssembly).concat(IpaAssembly)
+AssemblyQuast = FlyeAssemblyQuast.concat(CanuAssemblyQuast).concat(HifiasmAssemblyQuast).concat(IpaAssemblyQuast)
 
 process QCN50 {
 

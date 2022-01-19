@@ -28,6 +28,15 @@ MyGenome1;/path/to/movie.bam;/path/to/movie.bam.pbi
 Add any number of movies to this list; all movies that share a project ID will be assembled together. Note that if you plan on assembling multiple genomes
 using this approach, they need to share a genome size (at least roughly, i.e. within a factor of 2 or so). 
 
+### `--flye`
+Run the Flye assembler
+
+### `--hifiasm` 
+Run the HifiASM assembler (requires --hifi)
+
+### `--ipa`
+Run the IP assembler (requires --hifi)
+
 ### `--large`
 Boolean flag to enable assembly of larger genomes. By default, flye will run on a normal "fat" compute node. With this option it is possible to divert it to a dedicated "high-memory" node that may have specs different
 from the standard compute nodes. On Medcluster, this will enable the use of 1.5TB Ram and 30 cores on the "assembly node". 
